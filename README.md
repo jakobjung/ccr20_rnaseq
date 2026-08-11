@@ -54,30 +54,14 @@ Some directories have their own README.md file with information on the respectiv
 
 ## Workflow
 
-Here I describe the workflow to reproduce the results. Mapping is run on the Sanger farm (LSF),
+Here I describe the workflow to reproduce the results. Mapping is submitted as cluster jobs,
 everything downstream (DE analysis) runs locally in R.
-
-### 0. On the farm
-
-This repo (or at least `scripts/` and `data/`) should be checked out on scratch, alongside the
-already-downloaded raw data, e.g.:
-
-```text
-/lustre/scratch125/pam/teams/team377/jj21/rnaseq_upec/
-├── data/
-│   ├── fastq/X208SC26074449-Z01-F001/01.RawData/<SAMPLE>/*.fq.gz
-│   └── reference_sequences/
-└── scripts/
-```
-
-so that the relative paths in [./scripts/trimm_map_BB.sh](./scripts/trimm_map_BB.sh) resolve
-correctly.
 
 ### 1. Prerequisites
 
 For running the whole analysis, one needs the following packages/tools/software (make sure
-they're on `$PATH` on the farm, e.g. via `module load` or a conda env — edit the placeholder near
-the top of `trimm_map_BB.sh`):
+they're on `$PATH`, e.g. via `module load` or a conda env — edit the placeholder near the top of
+`trimm_map_BB.sh`):
 
 - **BBMap** (v38.84) & **BBDuk**
 - **samtools** (v1.12)
@@ -85,7 +69,8 @@ the top of `trimm_map_BB.sh`):
   counting)
 - **FastQC**
 - **R** (v4.1.1+) with Bioconductor/CRAN packages for the downstream DE analysis
-- Access to Sanger's LSF cluster (`bsub`/`bjobs`/`bhist`) on farm22
+- Access to a cluster job scheduler (the script submits jobs via `bsub`; adapt this if yours uses
+  something else)
 
 ### 2. Mapping
 
@@ -101,7 +86,7 @@ colibactin island (reference fasta/gff in
 *clbA-clbS* gene symbols — locate the colibactin/pks cluster by searching the gff for
 `polyketide`/`non-ribosomal peptide` in the product field, or by coordinates from the literature.
 
-Run the pipeline from `scripts/` on the farm head node:
+Run the pipeline from `scripts/`:
 
 ```bash
 # 1. submit one trim+map job per sample (concatenates lanes, trims with bbduk,
