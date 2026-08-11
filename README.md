@@ -1,0 +1,137 @@
+# RNA-Seq analysis of PNA-mediated knockdown of the colibactin regulator ClbR in *E. coli* CCR20
+
+- Project name: Antisense PNA targeting of the colibactin transcriptional activator ClbR in the
+  UPEC strain CCR20
+
+- Experiments/samples: Sarah Nentwich, Linda Popella
+
+- Supervision: Jörg Vogel, Lars Barquist
+
+- Data analysis/RNA-Seq analysis: Jakob J. Jung
+
+- Start: 2026-08
+
+## Introduction
+
+RNA-Seq analysis of the uropathogenic *E. coli* (UPEC) strain CCR20, treated with peptide nucleic
+acids (PNAs) targeting translation of ClbR, the transcriptional activator of the colibactin (*pks*)
+biosynthetic gene cluster. Two backgrounds were compared: CCR20+ (JVS-12599, wild-type-like) and
+CCR20 ΔclbR (JVS-13616, clean deletion of *clbR*), each in 3 independent clones. Samples were
+treated for 1 h or 4 h with:
+
+- **H2O** (untreated control)
+- **PNA 992** (PPNA-clbR) — the on-target PNA, targets the translation of *clbR*
+- **PNA 22** (PPNA-nt-control, scr-*acpP*) — scrambled/non-targeting control
+- **PNA 2107** (PPNA-clbR-mm) — sequence-matched mismatch control for PNA 992
+
+The ΔclbR background was not treated with PNA 992, since it has no *clbR* mRNA to target; it
+instead serves as a genetic control for on-target specificity. PNA 2107 is nominally the more
+rigorous control (same sequence as PNA 992 but mismatched), but in other experiments it has shown
+some unspecific, mildly growth-inhibitory effects — so part of this analysis is checking whether
+that holds here, in which case PNA 22 (scr-*acpP*) should be used as the main control for the
+transcriptomic comparison instead.
+
+In total 42 samples (2 backgrounds x up to 4 treatments x 2 time points x 3 clones, unbalanced —
+see [data/20260709_RNAseq-Samples_Label.xlsx](data/20260709_RNAseq-Samples_Label.xlsx) for the
+exact design). Sample 35 (ΔclbR, PNA 2107, 4 h) failed Novogene's QC but was sequenced anyway, so
+treat its results with caution.
+
+The main biological question: does PNA 992 cause broad downregulation of the colibactin gene
+cluster while keeping off-target transcriptional effects to a minimum?
+
+Sequencing was done by Novogene (batch `X208SC26074449-Z01-F001`), each sample split across two
+flowcells/lanes (a top-up run), paired-end.
+
+## Directory structure
+
+The project is divided in 3 main directories:
+
+-   [data](data) : contains all raw, intermediate and final data of the project.
+-   [analysis](analysis): contains analysis files, such as figures, plots, tables, etc.
+-   [scripts](scripts): contains scripts to process and analyze data from the data directory.
+
+Some directories have their own README.md file with information on the respective files.
+
+## Workflow
+
+Here I describe the workflow to reproduce the results. Mapping is run on the Sanger farm (LSF),
+everything downstream (DE analysis) runs locally in R.
+
+### 0. On the farm
+
+This repo (or at least `scripts/` and `data/`) should be checked out on scratch, alongside the
+already-downloaded raw data, e.g.:
+
+```text
+/lustre/scratch125/pam/teams/team377/jj21/rnaseq_upec/
+├── data/
+│   ├── fastq/X208SC26074449-Z01-F001/01.RawData/<SAMPLE>/*.fq.gz
+│   └── reference_sequences/
+└── scripts/
+```
+
+so that the relative paths in [./scripts/trimm_map_BB.sh](./scripts/trimm_map_BB.sh) resolve
+correctly.
+
+### 1. Prerequisites
+
+For running the whole analysis, one needs the following packages/tools/software (make sure
+they're on `$PATH` on the farm, e.g. via `module load` or a conda env — edit the placeholder near
+the top of `trimm_map_BB.sh`):
+
+- **BBMap** (v38.84) & **BBDuk**
+- **samtools** (v1.12)
+- **featureCounts** (Subread, v2.0.1+, needs `--countReadPairs` support for paired-end fragment
+  counting)
+- **FastQC**
+- **R** (v4.1.1+) with Bioconductor/CRAN packages for the downstream DE analysis
+- Access to Sanger's LSF cluster (`bsub`/`bjobs`/`bhist`) on farm22
+
+### 2. Mapping
+
+All raw FastQ files live under
+[./data/fastq/X208SC26074449-Z01-F001/01.RawData/](./data/fastq/X208SC26074449-Z01-F001/01.RawData/),
+one subdirectory per sample, each containing paired-end reads split across two
+flowcells/lanes. Sample-to-condition mapping is in
+[./data/20260709_RNAseq-Samples_Label.xlsx](data/20260709_RNAseq-Samples_Label.xlsx).
+
+Reads are mapped against *E. coli* 536 (CP000247.1), a UPEC reference strain carrying the
+colibactin island (reference fasta/gff in
+[./data/reference_sequences/](./data/reference_sequences/)). Note the annotation does not carry
+*clbA-clbS* gene symbols — locate the colibactin/pks cluster by searching the gff for
+`polyketide`/`non-ribosomal peptide` in the product field, or by coordinates from the literature.
+
+Run the pipeline from `scripts/` on the farm head node:
+
+```bash
+# 1. submit one trim+map job per sample (concatenates lanes, trims with bbduk,
+#    maps with bbmap, sorts/indexes the bam):
+bash trimm_map_BB.sh submit
+
+# 2. once all "map_*" jobs have finished (check with `bjobs`/`bhist`), count
+#    reads over CDS/sRNA/tRNA/rRNA features:
+bash trimm_map_BB.sh counts
+```
+
+This produces, per sample, a sorted+indexed BAM in [./data/rna_align](./data/rna_align), and a
+combined count table [./data/rna_align/counttable_ccr20.txt](./data/rna_align/counttable_ccr20.txt).
+Trimmed libraries and per-sample FastQC reports are kept in [./data/libs](./data/libs).
+
+Per-sample bsub logs are written to `./scripts/logs/<SAMPLE>.{out,err}`. To get a summary trimming/
+mapping table with [./scripts/get_mapping_stats.sh](./scripts/get_mapping_stats.sh), first
+concatenate the logs:
+
+```bash
+cat scripts/logs/*.out > scripts/stdout_bsub_mapping.log
+bash scripts/get_mapping_stats.sh scripts/stdout_bsub_mapping.log
+```
+
+### 3. Differential expression analysis
+
+To run the differential expression analysis, run the R script
+[./scripts/fuso_rnaseq.R](./scripts/fuso_rnaseq.R), adapted to import
+[./data/rna_align/counttable_ccr20.txt](./data/rna_align/counttable_ccr20.txt) and the sample sheet
+above, and to set up contrasts for CCR20+ vs. CCR20 ΔclbR crossed with PNA 992/22/2107/H2O at 1 h
+and 4 h. This outputs figures/tables to the [./analysis](./analysis) directory, including a check
+of PNA 2107 off-target effects (to decide whether PNA 22 should be used as the main control) and
+the pks/colibactin cluster response to PNA 992 in the CCR20+ background.
