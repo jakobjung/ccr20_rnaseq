@@ -39,11 +39,16 @@ QUEUE="normal"
 CORES=4
 MEM_MB=8000            # per bsub job, in MB
 BBDUK_XMX="6g"          # bbduk/bbmap JVM heap, keep below MEM_MB
+GROUP="team377f"        # LSF fairshare group (from `show_my_lsf_groups`); leave empty to omit -G
 
-# TODO: load whatever gives you bbduk.sh/bbmap.sh, samtools and featureCounts
-# on farm22, e.g.:
-#   module load bbmap/38.84 samtools/1.12 subread/2.0.1
-# or activate a conda env with these tools installed.
+BSUB_GROUP_OPTS=()
+[ -n "$GROUP" ] && BSUB_GROUP_OPTS=(-G "$GROUP")
+
+# Load these before running (module names as available on farm22):
+#   module load bbtools/39.01 samtools/1.21 subread/2.0.6--he4a0461_0
+# NB subread must be >=2.0.3 for the --countReadPairs flag used in run_counts()
+# below — do NOT use subread/1.4.5-p1, it predates that flag and featureCounts
+# will error out on it.
 
 list_samples(){
     find "$RAWDATA" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort
@@ -52,7 +57,7 @@ list_samples(){
 submit_all(){
     mkdir -p "$LOGDIR"
     for SAMPLE in $(list_samples); do
-        bsub -q "$QUEUE" -n "$CORES" \
+        bsub -q "$QUEUE" -n "$CORES" "${BSUB_GROUP_OPTS[@]}" \
              -R "span[hosts=1] select[mem>${MEM_MB}] rusage[mem=${MEM_MB}]" -M "$MEM_MB" \
              -J "map_${SAMPLE}" \
              -o "$LOGDIR/${SAMPLE}.out" -e "$LOGDIR/${SAMPLE}.err" \
@@ -104,15 +109,32 @@ run_sample(){
     echo "[$SAMPLE] done"
 }
 
+build_saf(){
+    # featureCounts doesn't reliably parse GFF3's key=value attribute syntax,
+    # so build a plain SAF file (GeneID/Chr/Start/End/Strand) straight from
+    # the CDS/sRNA/tRNA/rRNA rows' locus_tag= field instead of feeding it the
+    # gff3 directly.
+    SAF="$ALIGNDIR/ecoli536_cds_sRNA_tRNA_rRNA.saf"
+    mkdir -p "$ALIGNDIR"
+    {
+        printf 'GeneID\tChr\tStart\tEnd\tStrand\n'
+        awk -F'\t' '$3=="CDS" || $3=="sRNA" || $3=="tRNA" || $3=="rRNA" {
+            match($9, /locus_tag=[^;]+/)
+            tag = substr($9, RSTART+10, RLENGTH-10)
+            print tag "\t" $1 "\t" $4 "\t" $5 "\t" $7
+        }' "$REF_GFF"
+    } > "$SAF"
+    echo "$SAF"
+}
+
 run_counts(){
     mkdir -p "$LOGDIR"
-    # locus_tag is used consistently for CDS/sRNA/tRNA/rRNA in this gff, so a
-    # single featureCounts call covers all feature types at once.
-    bsub -q "$QUEUE" -n "$CORES" \
+    SAF="$(build_saf)"
+    bsub -q "$QUEUE" -n "$CORES" "${BSUB_GROUP_OPTS[@]}" \
          -R "span[hosts=1] select[mem>${MEM_MB}] rusage[mem=${MEM_MB}]" -M "$MEM_MB" \
          -J featurecounts -o "$LOGDIR/featurecounts.out" -e "$LOGDIR/featurecounts.err" \
-         "featureCounts -T $CORES -p --countReadPairs -t CDS,sRNA,tRNA,rRNA -g locus_tag \
-             -a '$REF_GFF' -o '$ALIGNDIR/counttable_ccr20.txt' '$ALIGNDIR'/*.bam"
+         "featureCounts -T $CORES -p --countReadPairs -F SAF \
+             -a '$SAF' -o '$ALIGNDIR/counttable_ccr20.txt' '$ALIGNDIR'/*.bam"
 }
 
 case "${1:-}" in

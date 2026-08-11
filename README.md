@@ -65,8 +65,7 @@ they're on `$PATH`, e.g. via `module load` or a conda env — edit the placehold
 
 - **BBMap** (v38.84) & **BBDuk**
 - **samtools** (v1.12)
-- **featureCounts** (Subread, v2.0.1+, needs `--countReadPairs` support for paired-end fragment
-  counting)
+- **featureCounts** (Subread, v2.0.3+ for `--countReadPairs` support; e.g. 2.0.6)
 - **FastQC**
 - **R** (v4.1.1+) with Bioconductor/CRAN packages for the downstream DE analysis
 - Access to a cluster job scheduler (the script submits jobs via `bsub`; adapt this if yours uses
@@ -85,6 +84,9 @@ colibactin island (reference fasta/gff in
 [./data/reference_sequences/](./data/reference_sequences/)). Note the annotation does not carry
 *clbA-clbS* gene symbols — locate the colibactin/pks cluster by searching the gff for
 `polyketide`/`non-ribosomal peptide` in the product field, or by coordinates from the literature.
+Since featureCounts doesn't reliably parse GFF3's `key=value` attribute syntax, the counting step
+first derives a plain SAF file (`GeneID`/`Chr`/`Start`/`End`/`Strand`) from the gff3's
+CDS/sRNA/tRNA/rRNA rows rather than passing the gff3 to featureCounts directly.
 
 Run the pipeline from `scripts/`:
 
