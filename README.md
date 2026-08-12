@@ -88,29 +88,28 @@ Since featureCounts doesn't reliably parse GFF3's `key=value` attribute syntax, 
 first derives a plain SAF file (`GeneID`/`Chr`/`Start`/`End`/`Strand`) from the gff3's
 CDS/sRNA/tRNA/rRNA rows rather than passing the gff3 to featureCounts directly.
 
-Run the pipeline from `scripts/`:
+[./scripts/trimm_map_BB.sh](./scripts/trimm_map_BB.sh) loops through all samples: concatenating
+lanes, trimming with bbduk, mapping with bbmap, and sorting/indexing the resulting bam, then counts
+reads over CDS/sRNA/tRNA/rRNA features once all samples are mapped. Submit it as a single job from
+`scripts/`:
 
 ```bash
-# 1. submit one trim+map job per sample (concatenates lanes, trims with bbduk,
-#    maps with bbmap, sorts/indexes the bam):
-bash trimm_map_BB.sh submit
-
-# 2. once all "map_*" jobs have finished (check with `bjobs`/`bhist`), count
-#    reads over CDS/sRNA/tRNA/rRNA features:
-bash trimm_map_BB.sh counts
+bsub -q long -n 4 -M 10000 -R "span[hosts=1] select[mem>10000] rusage[mem=10000]" \
+     -o stdout.%J -e stderr.%J bash trimm_map_BB.sh
 ```
+
+(`normal`'s 12h run limit may be tight running 42 samples sequentially; `long` gives 48h.)
 
 This produces, per sample, a sorted+indexed BAM in [./data/rna_align](./data/rna_align), and a
 combined count table [./data/rna_align/counttable_ccr20.txt](./data/rna_align/counttable_ccr20.txt).
 Trimmed libraries and per-sample FastQC reports are kept in [./data/libs](./data/libs).
 
-Per-sample bsub logs are written to `./scripts/logs/<SAMPLE>.{out,err}`. To get a summary trimming/
-mapping table with [./scripts/get_mapping_stats.sh](./scripts/get_mapping_stats.sh), first
-concatenate the logs:
+The job's stdout log doubles as bbduk/bbmap's own log output, so
+[./scripts/get_mapping_stats.sh](./scripts/get_mapping_stats.sh) can be run directly against it to
+get a summary trimming/mapping table:
 
 ```bash
-cat scripts/logs/*.out > scripts/stdout_bsub_mapping.log
-bash scripts/get_mapping_stats.sh scripts/stdout_bsub_mapping.log
+bash scripts/get_mapping_stats.sh scripts/stdout.<jobid>
 ```
 
 ### 3. Differential expression analysis
