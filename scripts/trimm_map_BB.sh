@@ -4,10 +4,11 @@
 # CP000247.1, a UPEC strain carrying the colibactin (pks) island).
 #
 # Run the whole thing as a single job, e.g.:
-#   bsub -q long -n 4 -M 10000 -R "span[hosts=1] select[mem>10000] rusage[mem=10000]" \
+#   bsub -q long -n 8 -M 12000 -R "span[hosts=1] select[mem>12000] rusage[mem=12000]" \
 #        -o scripts/stdout.%J -e scripts/stderr.%J bash scripts/trimm_map_BB.sh
 # (normal's 12h run limit may be tight for 42 samples run sequentially; long
-# gives 48h. Add -G <group> if your team uses LSF fairshare groups.)
+# gives 48h. Add -G <group> if your team uses LSF fairshare groups. -n here
+# must match THREADS below.)
 #
 # Load these first (module names as available on farm22):
 #   module load bbtools/39.01 samtools/1.21 subread/2.0.6--he4a0461_0
@@ -19,6 +20,7 @@ main(){
     # so it works whether you submit it from scripts/ or the repo root.
     SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
     PROJECT=$SCRIPT_DIR/../data
+    THREADS=8
     echo "Start trimming"
     rename_trim_rna_libs
     echo "Trimming done. Start mapping"
@@ -39,7 +41,7 @@ rename_trim_rna_libs(){
         cat $SAMPLEDIR/*_2.fq.gz > $PROJECT/libs/${SAMPLE}_2.fq.gz
         # bbduk trims low quality bases and removes adapters:
         bbduk.sh in1=$PROJECT/libs/${SAMPLE}_1.fq.gz in2=$PROJECT/libs/${SAMPLE}_2.fq.gz \
-                 ref=$PROJECT/reference_sequences/adapters.fa -Xmx6g t=4 \
+                 ref=$PROJECT/reference_sequences/adapters.fa -Xmx6g t=$THREADS \
                  out1=$PROJECT/libs/${SAMPLE}_1_trimmed.fq.gz out2=$PROJECT/libs/${SAMPLE}_2_trimmed.fq.gz \
                  ktrim=r k=23 mink=11 hdist=1 qtrim=r trimq=10
     done
@@ -56,10 +58,10 @@ align_rna_reads_genome(){
         # -Xmx must be set explicitly: bbmap.sh otherwise auto-sizes its heap
         # from the node's total RAM (not the LSF job's -M reservation) and
         # gets silently killed for exceeding it.
-        bbmap.sh in1=$i in2=${i%_1_trimmed.fq.gz}_2_trimmed.fq.gz trimreaddescription=t t=4 \
+        bbmap.sh in1=$i in2=${i%_1_trimmed.fq.gz}_2_trimmed.fq.gz trimreaddescription=t t=$THREADS \
                   ref=$PROJECT/reference_sequences/ecoli536.fasta k=13 -Xmx6g outm=$DIR/$NAME.sam
         # sort sam file, create BAM file:
-        samtools sort -O BAM -@ 4 $DIR/$NAME.sam > $DIR/$NAME.bam
+        samtools sort -O BAM -@ $THREADS $DIR/$NAME.sam > $DIR/$NAME.bam
         # remove sam file: (not actually needed)
         rm $DIR/$NAME.sam
         # index BAM file:
@@ -82,7 +84,7 @@ count_features(){
       }' $PROJECT/reference_sequences/ecoli536_sRNAs_modified.gff3
     } > $SAF
 
-    featureCounts -T 4 -p --countReadPairs -F SAF \
+    featureCounts -T $THREADS -p --countReadPairs -F SAF \
                   -a $SAF -o $PROJECT/rna_align/counttable_ccr20.txt \
                   $PROJECT/rna_align/*.bam
 }

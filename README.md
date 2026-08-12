@@ -95,7 +95,7 @@ relative to the script's own location, so it can be submitted as a single job fr
 from the repo root:
 
 ```bash
-bsub -q long -n 4 -M 10000 -R "span[hosts=1] select[mem>10000] rusage[mem=10000]" \
+bsub -q long -n 8 -M 12000 -R "span[hosts=1] select[mem>12000] rusage[mem=12000]" \
      -o scripts/stdout.%J -e scripts/stderr.%J bash scripts/trimm_map_BB.sh
 ```
 
