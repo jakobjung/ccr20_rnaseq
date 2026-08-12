@@ -15,7 +15,10 @@
 # use subread/1.4.5-p1 or 2.0.1, they predate that flag.
 
 main(){
-    PROJECT=../data
+    # resolve relative to this script's own location, not the caller's CWD,
+    # so it works whether you submit it from scripts/ or the repo root.
+    SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+    PROJECT=$SCRIPT_DIR/../data
     echo "Start trimming"
     rename_trim_rna_libs
     echo "Trimming done. Start mapping"
@@ -36,7 +39,7 @@ rename_trim_rna_libs(){
         cat $SAMPLEDIR/*_2.fq.gz > $PROJECT/libs/${SAMPLE}_2.fq.gz
         # bbduk trims low quality bases and removes adapters:
         bbduk.sh in1=$PROJECT/libs/${SAMPLE}_1.fq.gz in2=$PROJECT/libs/${SAMPLE}_2.fq.gz \
-                 ref=../data/reference_sequences/adapters.fa -Xmx6g t=4 \
+                 ref=$PROJECT/reference_sequences/adapters.fa -Xmx6g t=4 \
                  out1=$PROJECT/libs/${SAMPLE}_1_trimmed.fq.gz out2=$PROJECT/libs/${SAMPLE}_2_trimmed.fq.gz \
                  ktrim=r k=23 mink=11 hdist=1 qtrim=r trimq=10
     done

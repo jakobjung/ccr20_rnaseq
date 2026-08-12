@@ -90,12 +90,13 @@ CDS/sRNA/tRNA/rRNA rows rather than passing the gff3 to featureCounts directly.
 
 [./scripts/trimm_map_BB.sh](./scripts/trimm_map_BB.sh) loops through all samples: concatenating
 lanes, trimming with bbduk, mapping with bbmap, and sorting/indexing the resulting bam, then counts
-reads over CDS/sRNA/tRNA/rRNA features once all samples are mapped. Submit it as a single job from
-`scripts/`:
+reads over CDS/sRNA/tRNA/rRNA features once all samples are mapped. All its paths are resolved
+relative to the script's own location, so it can be submitted as a single job from anywhere, e.g.
+from the repo root:
 
 ```bash
 bsub -q long -n 4 -M 10000 -R "span[hosts=1] select[mem>10000] rusage[mem=10000]" \
-     -o stdout.%J -e stderr.%J bash trimm_map_BB.sh
+     -o scripts/stdout.%J -e scripts/stderr.%J bash scripts/trimm_map_BB.sh
 ```
 
 (`normal`'s 12h run limit may be tight running 42 samples sequentially; `long` gives 48h.)
