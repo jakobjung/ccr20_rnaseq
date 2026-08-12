@@ -38,7 +38,11 @@ LOGDIR="$SCRIPT_DIR/logs"
 QUEUE="normal"
 CORES=4
 MEM_MB=8000            # per bsub job, in MB
-BBDUK_XMX="6g"          # bbduk/bbmap JVM heap, keep below MEM_MB
+JAVA_XMX="6g"           # bbduk/bbmap JVM heap, keep below MEM_MB. Must be set
+                         # explicitly: bbmap.sh otherwise auto-sizes its heap
+                         # from the *node's* total RAM (up to ~2TB on some
+                         # farm22 hosts), not the LSF job's memory reservation,
+                         # and gets silently killed for exceeding -M.
 GROUP="team377f"        # LSF fairshare group (from `show_my_lsf_groups`); leave empty to omit -G
 
 BSUB_GROUP_OPTS=()
@@ -89,13 +93,17 @@ run_sample(){
     # fastqc output and adjust ktrim/qtrim/trimq if adapter or quality content
     # looks unusual for this library prep.
     bbduk.sh in1="$R1_CAT" in2="$R2_CAT" \
-             ref="$ADAPTERS" -Xmx${BBDUK_XMX} t="$CORES" \
+             ref="$ADAPTERS" -Xmx${JAVA_XMX} t="$CORES" \
              out1="$R1_TRIM" out2="$R2_TRIM" \
              ktrim=r k=23 mink=11 hdist=1 qtrim=r trimq=10
 
     echo "[$SAMPLE] mapping to ecoli536 with bbmap"
+    # nodisk=t: build the index in memory instead of caching it on disk under
+    # ./ref/ (relative to CWD) — with all samples run as concurrent LSF jobs
+    # sharing the same CWD, an on-disk cache would race across jobs. The
+    # genome is tiny (~5Mb) so rebuilding per job costs a couple of seconds.
     bbmap.sh in1="$R1_TRIM" in2="$R2_TRIM" \
-             ref="$REF_FASTA" t="$CORES" trimreaddescription=t k=12 \
+             ref="$REF_FASTA" t="$CORES" trimreaddescription=t k=12 -Xmx${JAVA_XMX} nodisk=t \
              outm="$ALIGNDIR/${SAMPLE}.sam"
 
     echo "[$SAMPLE] sorting & indexing bam"
