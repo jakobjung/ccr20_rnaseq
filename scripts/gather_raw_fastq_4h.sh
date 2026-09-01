@@ -25,7 +25,11 @@ DEST=$SCRIPT_DIR/../GEO_submission/raw_fastq_4h
 mkdir -p "$DEST"
 
 # columns in the sample table: label,RNA_conc_ng_ul,PNA,strain,clone,treatment_time_h,unique_identifier
-SAMPLES=$(awk -F',' 'NR>1 && $6==4 {print $1","$7}' "$SAMPLE_TABLE")
+# tr -d '\r' first: the table has Windows-style CRLF line endings, and plain
+# awk -F',' only strips the \n, leaving \r attached to the last field
+# (unique_identifier) - which then silently corrupts every destination
+# filename with an embedded control character.
+SAMPLES=$(tr -d '\r' < "$SAMPLE_TABLE" | awk -F',' 'NR>1 && $6==4 {print $1","$7}')
 echo "4h samples to gather: $(echo "$SAMPLES" | wc -l)"
 
 while IFS=',' read -r LABEL SAMPLE_ID; do
