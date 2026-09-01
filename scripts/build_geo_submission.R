@@ -63,7 +63,7 @@ samples <- sample_info %>%
     batch = "Novogene X208SC26074449-Z01-F001",
     molecule = "total RNA",
     single_or_paired_end = "paired-end",
-    instrument_model = "[FILL IN: sequencer model - check the Novogene report]",
+    instrument_model = "Illumina NovaSeq X Plus (PE150)",
     description = paste0("RNA-seq of E. coli CCR20, ", pna_display[PNA],
                          ", 4 h post-treatment, biological replicate (clone) ",
                          sub("clone_", "", clone), "."),
@@ -107,24 +107,53 @@ series <- data.frame(
   stringsAsFactors = FALSE
 )
 
+# Protocols tab, matching GEO's real column set exactly (one row - all 21 4h
+# samples were grown/treated/extracted/sequenced/processed identically):
+# growth protocol | treatment protocol | extract protocol | library
+# construction protocol | data processing step (x6) | genome build/assembly |
+# processed data files format and content (x2)
 protocols <- data.frame(
-  protocol = c("growth protocol", "treatment protocol", "extraction protocol",
-              "library construction protocol", "data processing steps"),
-  text = c(
-    "[FILL IN: growth medium, temperature, growth phase at treatment - not recorded in this repo]",
-    "[FILL IN: PNA concentration, delivery method, exposure duration before harvest - not recorded in this repo]",
-    "[FILL IN: RNA extraction kit/method, rRNA depletion if any - not recorded in this repo]",
-    "[FILL IN: library prep kit, strandedness - not recorded in this repo]",
-    paste(
-      "1. Adapters removed and bases with Phred quality score <10 trimmed with BBDuk (BBTools v39.01).",
-      "2. Trimmed reads mapped to the E. coli 536 (UPEC, GenBank CP000247.1) genome with BBMap (v39.01).",
-      "3. Reads quantified against CDS, sRNA, tRNA and rRNA features with featureCounts (Subread v2.0.6; -p --countReadPairs).",
-      "4. Processed data file: featureCounts read-count matrix, restricted to the 4 h samples.",
-      sep = "\n"
-    )
-  ),
+  growth = paste("Overnight cultures of E. coli CCR20+ and CCR20+ ΔclbR were grown in M9+maltose",
+                "medium. Cultures were diluted in fresh M9+maltose medium to OD600 0.05 and",
+                "incubated at 37°C with shaking at 220 rpm until reaching OD600 0.5, then diluted",
+                "1:10 in fresh M9+maltose medium before treatment."),
+  treatment = paste("570 µL aliquots of diluted culture were treated with 30 µL of 20x PPNA working",
+                    "solution (200 µM, for a final concentration of 10 µM) or an equivalent volume of",
+                    "water (untreated control), then incubated in a ThermoMixer (Eppendorf) at 37°C",
+                    "with 400 rpm shaking for 4 h."),
+  extract = paste("Following treatment, bacterial RNA was stabilized by adding two volumes of",
+                  "RNAprotect Bacteria Reagent (Qiagen) and incubating at room temperature for",
+                  "5-10 min. Cells were pelleted by centrifugation (4°C, 21,100 x g, 20 min) and",
+                  "pellets stored at -20°C overnight. RNA was isolated using the miRNeasy Mini Kit",
+                  "(Qiagen) with minor modifications: cell pellets were resuspended in TE buffer",
+                  "(pH 8.0) with 0.5 mg/mL lysozyme and incubated 5 min with intermittent vortexing;",
+                  "Buffer RLT with 1% ß-mercaptoethanol was added, followed by ethanol to a final",
+                  "concentration of 60%; samples were loaded onto miRNeasy spin columns, washed per",
+                  "the manufacturer's instructions, treated with on-column DNase digestion",
+                  "(RNase-Free DNase Set, Qiagen; Buffer RWT prepared with isopropanol), and eluted",
+                  "in RNase-free water."),
+  library_construction = paste("Prokaryotic directional mRNA library preparation, including rRNA",
+                               "removal, and RNA sequencing (Illumina NovaSeq X Plus, PE150) were",
+                               "performed by Novogene."),
+  processing_step_1 = "Adapters removed and bases with Phred quality score <10 trimmed using BBDuk (BBTools v39.01).",
+  processing_step_2 = "Trimmed reads mapped to the E. coli 536 (UPEC, GenBank CP000247.1) genome using BBMap (v39.01).",
+  processing_step_3 = "Reads quantified against CDS, sRNA, tRNA and rRNA features using featureCounts (Subread v2.0.6; -p --countReadPairs).",
+  processing_step_4 = "Low-expression genes filtered out and libraries normalized (TMM) using edgeR (v4.8.2).",
+  processing_step_5 = "Differential expression tested per comparison using edgeR's quasi-likelihood F-test (glmQLFit/glmQLFTest).",
+  processing_step_6 = "Genes with |log2 fold change| > 2 and FDR-adjusted P-value < 0.001 were considered differentially expressed.",
+  genome_build = "Escherichia coli 536, GenBank CP000247.1",
+  processed_format_1 = paste("Tab-delimited read-count matrix from featureCounts: columns Geneid, Chr,",
+                             "Start, End, Strand, Length, followed by one raw-read-count column per 4 h",
+                             "sample (processed_counttable_4h.txt)."),
+  processed_format_2 = "",
   stringsAsFactors = FALSE
 )
+colnames(protocols) <- c("growth protocol", "treatment protocol", "extract protocol",
+                         "library construction protocol",
+                         "data processing step", "data processing step", "data processing step",
+                         "data processing step", "data processing step", "data processing step",
+                         "genome build/assembly",
+                         "processed data files format and content", "processed data files format and content")
 
 write_xlsx(list(Series = series, Samples = samples, Protocols = protocols),
           "GEO_submission/GEO_metadata_4h.xlsx")
