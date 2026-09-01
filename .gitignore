@@ -19,4 +19,5 @@
 *.xml
 *.xlsx
 !data/20260709_RNAseq-Samples_Label.xlsx
+!data/20260709_RNAseq_sample_table.csv
 .DS_Store

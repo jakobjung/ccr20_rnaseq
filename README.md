@@ -17,7 +17,7 @@ RNA-Seq analysis of the uropathogenic *E. coli* (UPEC) strain CCR20, treated wit
 acids (PNAs) targeting translation of ClbR, the transcriptional activator of the colibactin (*pks*)
 biosynthetic gene cluster. Two backgrounds were compared: CCR20+ (JVS-12599, wild-type-like) and
 CCR20 ΔclbR (JVS-13616, clean deletion of *clbR*), each in 3 independent clones. Samples were
-treated for 1 h or 4 h with:
+treated for 4 h with:
 
 - **H2O** (untreated control)
 - **PNA 992** (PPNA-clbR) — the on-target PNA, targets the translation of *clbR*
@@ -31,10 +31,10 @@ some unspecific, mildly growth-inhibitory effects — so part of this analysis i
 that holds here, in which case PNA 22 (scr-*acpP*) should be used as the main control for the
 transcriptomic comparison instead.
 
-In total 42 samples (2 backgrounds x up to 4 treatments x 2 time points x 3 clones, unbalanced —
-see [data/20260709_RNAseq-Samples_Label.xlsx](data/20260709_RNAseq-Samples_Label.xlsx) for the
-exact design). Sample 35 (ΔclbR, PNA 2107, 4 h) failed Novogene's QC but was sequenced anyway, so
-treat its results with caution.
+In total 21 samples (2 backgrounds x up to 4 treatments x 3 clones — see
+[data/20260709_RNAseq-Samples_Label.xlsx](data/20260709_RNAseq-Samples_Label.xlsx) for the exact
+design). Sample 35 (ΔclbR, PNA 2107) failed Novogene's QC but was sequenced anyway, so treat its
+results with caution.
 
 The main biological question: does PNA 992 cause broad downregulation of the colibactin gene
 cluster while keeping off-target transcriptional effects to a minimum?
@@ -47,7 +47,7 @@ flowcells/lanes (a top-up run), paired-end.
 The project is divided in 3 main directories:
 
 -   [data](data) : contains all raw, intermediate and final data of the project.
--   [analysis](analysis): contains analysis files, such as figures, plots, tables, etc.
+-   [analysis_4h](analysis_4h): contains analysis files, such as figures, plots, tables, etc.
 -   [scripts](scripts): contains scripts to process and analyze data from the data directory.
 
 Some directories have their own README.md file with information on the respective files.
@@ -63,10 +63,11 @@ For running the whole analysis, one needs the following packages/tools/software 
 they're on `$PATH`, e.g. via `module load` or a conda env — edit the placeholder near the top of
 `trimm_map_BB.sh`):
 
-- **BBMap** (v38.84) & **BBDuk**
-- **samtools** (v1.12)
+- **BBMap** (v39.01) & **BBDuk**
+- **samtools** (v1.21)
 - **featureCounts** (Subread, v2.0.3+ for `--countReadPairs` support; e.g. 2.0.6)
 - **FastQC**
+- **BLAST+** (v2.9+; only needed once, for `build_gene_name_mapping.R` — see step 4)
 - **R** (v4.1.1+) with Bioconductor/CRAN packages for the downstream DE analysis
 - Access to a cluster job scheduler (the script submits jobs via `bsub`; adapt this if yours uses
   something else)
@@ -99,7 +100,7 @@ bsub -q long -n 8 -M 12000 -R "span[hosts=1] select[mem>12000] rusage[mem=12000]
      -o scripts/stdout.%J -e scripts/stderr.%J bash scripts/trimm_map_BB.sh
 ```
 
-(`normal`'s 12h run limit may be tight running 42 samples sequentially; `long` gives 48h.)
+(`normal`'s 12h run limit may be tight running all samples sequentially; `long` gives 48h.)
 
 This produces, per sample, a sorted+indexed BAM in [./data/rna_align](./data/rna_align), and a
 combined count table [./data/rna_align/counttable_ccr20.txt](./data/rna_align/counttable_ccr20.txt).
@@ -116,9 +117,29 @@ bash scripts/get_mapping_stats.sh scripts/stdout.<jobid>
 ### 3. Differential expression analysis
 
 To run the differential expression analysis, run the R script
-[./scripts/fuso_rnaseq.R](./scripts/fuso_rnaseq.R), adapted to import
+[./scripts/rnaseq_analysis_4h.R](./scripts/rnaseq_analysis_4h.R), adapted to import
 [./data/rna_align/counttable_ccr20.txt](./data/rna_align/counttable_ccr20.txt) and the sample sheet
-above, and to set up contrasts for CCR20+ vs. CCR20 ΔclbR crossed with PNA 992/22/2107/H2O at 1 h
-and 4 h. This outputs figures/tables to the [./analysis](./analysis) directory, including a check
-of PNA 2107 off-target effects (to decide whether PNA 22 should be used as the main control) and
-the pks/colibactin cluster response to PNA 992 in the CCR20+ background.
+above. The 4 h samples are used for the full analysis: one unified edgeR model is fit across all of
+them, then queried for the specific comparisons of interest — the on-target PNA 992 vs. H2O/PNA
+22/PNA 2107 in CCR20+, PNA 22 and PNA 2107 vs. H2O (each PNA's own off-target check), the two
+cross-background PNA 992 (CCR20+) vs. PNA 22/PNA 2107 (ΔclbR) comparisons, and the ΔclbR vs. CCR20+
+untreated baseline.
+
+This outputs, to [./analysis_4h](./analysis_4h):
+
+- a PCA plot (with and without the PNA 2107 mismatch-control samples, since it's not yet decided
+  whether that control gets used)
+- one volcano plot per comparison (`volcano_plots/`), colibactin cluster genes highlighted
+- a colibactin-cluster-only heatmap and a top-10-up/top-10-down heatmap (`heatmaps/`), plus a
+  supplementary table of the same genes' log2FC/FDR values across all comparisons
+
+### 4. Gene names
+
+The UPEC annotation only has locus tags (`ECP_XXXX`), no gene symbols. Heatmap rows and the
+supplementary table instead show real gene names wherever possible, taken from
+[./scripts/build_gene_name_mapping.R](./scripts/build_gene_name_mapping.R) — a one-time script
+(needs BLAST+) that reciprocal-BLASTs the UPEC proteome against *E. coli* K-12 MG1655's curated
+annotation and writes the result to
+[./data/reference_sequences/ecp_gene_names.csv](./data/reference_sequences/ecp_gene_names.csv).
+Run it once before `rnaseq_analysis_4h.R`; genes without a reciprocal best hit (e.g. the colibactin
+cluster itself, which K-12 doesn't have) just fall back to their locus tag.
