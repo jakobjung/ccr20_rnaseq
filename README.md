@@ -3,9 +3,9 @@
 - Project name: Antisense PNA targeting of the colibactin transcriptional activator ClbR in the
   UPEC strain CCR20
 
-- Experiments/samples: Sarah Nentwich, Linda Popella
+- Experiments/samples: Sarah Nentwich, Linda Popella, Chandradhish Ghosh, Juliane Adelmann
 
-- Supervision: Jörg Vogel, Lars Barquist
+- Supervision: Jörg Vogel, Lars Barquist, Claudia Höbartner
 
 - Data analysis/RNA-Seq analysis: Jakob J. Jung
 
@@ -54,8 +54,7 @@ Some directories have their own README.md file with information on the respectiv
 
 ## Workflow
 
-Here I describe the workflow to reproduce the results. Mapping is submitted as cluster jobs,
-everything downstream (DE analysis) runs locally in R.
+Here I describe the workflow to reproduce the results.
 
 ### 1. Prerequisites
 
@@ -69,8 +68,6 @@ they're on `$PATH`, e.g. via `module load` or a conda env — edit the placehold
 - **FastQC**
 - **BLAST+** (v2.9+; only needed once, for `build_gene_name_mapping.R` — see step 4)
 - **R** (v4.1.1+) with Bioconductor/CRAN packages for the downstream DE analysis
-- Access to a cluster job scheduler (the script submits jobs via `bsub`; adapt this if yours uses
-  something else)
 
 ### 2. Mapping
 
@@ -92,26 +89,22 @@ CDS/sRNA/tRNA/rRNA rows rather than passing the gff3 to featureCounts directly.
 [./scripts/trimm_map_BB.sh](./scripts/trimm_map_BB.sh) loops through all samples: concatenating
 lanes, trimming with bbduk, mapping with bbmap, and sorting/indexing the resulting bam, then counts
 reads over CDS/sRNA/tRNA/rRNA features once all samples are mapped. All its paths are resolved
-relative to the script's own location, so it can be submitted as a single job from anywhere, e.g.
-from the repo root:
+relative to the script's own location, so it can be run from anywhere, e.g. from the repo root:
 
 ```bash
-bsub -q long -n 8 -M 12000 -R "span[hosts=1] select[mem>12000] rusage[mem=12000]" \
-     -o scripts/stdout.%J -e scripts/stderr.%J bash scripts/trimm_map_BB.sh
+bash scripts/trimm_map_BB.sh > scripts/stdout.log 2> scripts/stderr.log
 ```
-
-(`normal`'s 12h run limit may be tight running all samples sequentially; `long` gives 48h.)
 
 This produces, per sample, a sorted+indexed BAM in [./data/rna_align](./data/rna_align), and a
 combined count table [./data/rna_align/counttable_ccr20.txt](./data/rna_align/counttable_ccr20.txt).
 Trimmed libraries and per-sample FastQC reports are kept in [./data/libs](./data/libs).
 
-The job's stdout log doubles as bbduk/bbmap's own log output, so
+The stdout log doubles as bbduk/bbmap's own log output, so
 [./scripts/get_mapping_stats.sh](./scripts/get_mapping_stats.sh) can be run directly against it to
 get a summary trimming/mapping table:
 
 ```bash
-bash scripts/get_mapping_stats.sh scripts/stdout.<jobid>
+bash scripts/get_mapping_stats.sh scripts/stdout.log
 ```
 
 ### 3. Differential expression analysis
